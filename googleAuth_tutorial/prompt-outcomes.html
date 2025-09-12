@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google One Tap Prompt behaviors</title>
+    <style>
+      body { font-family: sans-serif; padding: 20px; }
+      #log {
+        border: 1px solid #ccc; background-color: #f0f0f0;
+        padding: 15px; margin-top: 20px;
+        white-space: pre-wrap; font-family: monospace;
+      }
+      .success { color: green; }
+      .error { color: red; }
+      .info { color: blue; }
+      .warning { color: orange; }
+    </style>
+  </head>
+  <body>
+    <h1>One Tap behaviors</h1>
+    <p>Open the developer console to see detailed logs.</p>
+    <div id="log">Awaiting events...</div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+      // logging utility to display event and notification info
+      const logElement = document.getElementById("log");
+      function log(message, type = "info") {
+        const timestamp = new Date().toLocaleTimeString();
+        logElement.innerHTML +=
+          `\n<span class="${type}">[${timestamp}] ${message}</span>`;
+        console.log(`[${type.toUpperCase()}] ${message}`);
+      }
+
+      function decodeJwt(jwt) {
+        try {
+          const parts = jwt.split(".");
+          if (parts.length !== 3) {
+            throw new Error("Invalid JWT structure");
+          }
+          const base64Url = parts[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join(""),
+          );
+          return JSON.parse(jsonPayload);
+        } catch (e) {
+          log(`Error decoding JWT: ${e.message}`, "error");
+          return null;
+        }
+      }
+
+      /* Handles the credential response after a user signs in. */
+      function handleCredentialResponse(credentialResponse) {
+        log("Credential Response received.", "success");
+
+        const credential = credentialResponse.credential;
+        log(`Credential JWT: ${credential.substring(0, 30)}...`);
+
+        // For demonstration, we decode the JWT on the client side.
+        // REMEMBER: Always verify the token on your backend server!
+        const payload = decodeJwt(credential);
+        if (payload) {
+          log(`Welcome, ${payload.name}! (Email: ${payload.email})`);
+          log("Decoded JWT Payload: " + JSON.stringify(payload, null, 2));
+        }
+      }
+
+      /* Handles notifications about the One-Tap prompt's UI status. */
+      function handlePromptMomentNotification(notification) {
+        log(`Prompt Moment Notification received.`, "info");
+
+        if (notification.isNotDisplayed()) {
+          const reason = notification.getNotDisplayedReason();
+          log(`Prompt not displayed. Reason: <strong>${reason}</strong>`,
+              "error");
+        }
+        if (notification.isSkippedMoment()) {
+          const reason = notification.getSkippedReason();
+          log(`Prompt was skipped. Reason: <strong>${reason}</strong>`,
+              "warning");
+          if (reason === "auto_cancel") {
+            log("may have called prompt() multiple times in a row.");
+          } else if (reason === "user_cancel") {
+            log("The user manually closed the prompt.");
+          }
+        }
+        if (notification.isDismissedMoment()) {
+          const reason = notification.getDismissedReason();
+          log(`Prompt dismissed. Reason: <strong>${reason}</strong>`, "info");
+          if (reason === "credential_returned") {
+            log("Expected, credential sent to the JS handler.");
+          } else if (reason === "cancel_called") {
+            log("programmatic call to google.accounts.id.cancel().");
+          }
+        }
+      }
+
+      window.onload = function () {
+        try {
+          google.accounts.id.initialize({
+            client_id: "872632489535-0dc0dehepucsopm3pqdpdkuq7n4t7ump.apps.googleusercontent.com",
+            callback: handleCredentialResponse,
+            ux_mode: "popup",
+          });
+
+          google.accounts.id.prompt(handlePromptMomentNotification);
+          log("One Tap initialized. Waiting for prompt...");
+        } catch (e) {
+          log(`Initialization Error: ${e.message}`, "error");
+        }
+      };
+    </script>
+  </body>
+</html>

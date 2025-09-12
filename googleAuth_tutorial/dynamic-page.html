@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script src="https://accounts.google.com/gsi/client" async></script>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <h1>Google One Tap dynamic page</h1>
+    <script>
+      const generateRandomString = (length) => {
+        const array = new Uint8Array(length / 2);
+        window.crypto.getRandomValues(array);
+        return Array.from(array, (byte) =>
+          byte.toString(16).padStart(2, "0")
+        ).join("");
+      };
+
+      const setCookie = (name, value) => {
+        document.cookie = '${name}=${value};path=/;SameSite=Lax';
+      };
+
+      const getCookie = (name) => {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(";");
+        for (let i = 0; i < ca.length; i++) {
+          let c = ca[i];
+          while (c.charAt(0) == " ") c = c.substring(1, c.length);
+          if (c.indexOf(nameEQ) == 0)
+            return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+      };
+
+      function handleResponse(rsp) {
+        console.log("ID Token received from Google: ", rsp.credential);
+        console.log("Submitting token to server via dynamic form POST.");
+
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "http://" + window.location.host + "/user-login";
+
+        // Add the credential and CSRF cookie value asa hidden fields
+        const hiddenField = document.createElement("input");
+        hiddenField.type = "hidden";
+        hiddenField.name = "credential";
+        hiddenField.value = rsp.credential;
+        form.appendChild(hiddenField);
+
+        const csrfToken = getCookie("g_csrf_token");
+        if (csrfToken) {
+          console.log("Found g_csrf_token cookie, adding to form.");
+          const csrfField = document.createElement("input");
+          csrfField.type = "hidden";
+          csrfField.name = "g_csrf_token";
+          csrfField.value = csrfToken;
+          form.appendChild(csrfField);
+        } else {
+          console.warn(
+            "Warning: g_csrf_token cookie not found. POSTing without it."
+          );
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+      }
+
+      window.onload = function () {
+        const csrfToken = generateRandomString(12);
+        setCookie("g_csrf_token", csrfToken);
+        console.log("CSRF token cookie set on page load:", csrfToken);
+
+        google.accounts.id.initialize({
+          client_id: "872632489535-0dc0dehepucsopm3pqdpdkuq7n4t7ump.apps.googleusercontent.com",
+          ux_mode: "popup",
+          callback: handleResponse,
+        });
+
+        google.accounts.id.prompt(); // Display the One Tap prompt
+      };
+    </script>
+  </body>
+</html>

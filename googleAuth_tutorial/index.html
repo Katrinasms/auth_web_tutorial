@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JWT Verification</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; }
+      .top-nav {
+        text-align: center; padding: 15px 0; background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6; width: 100%;
+      }
+      .top-nav a {
+        margin: 0 15px; text-decoration: none; font-weight: bold;
+        color: #007bff; font-size: 1.1em;
+      }
+      .top-nav a:hover { text-decoration: underline; }
+      .page-container { padding: 20px; }
+      pre {
+        background-color: #f9f9f9; padding: 10px; overflow-x: auto;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .error { color: red; }
+      .success { color: green; }
+      #jwt-form { margin-bottom: 20px; flex: 1; }
+      fieldset {
+        border: 1px solid #ddd; padding: 10px; margin: 0;
+        min-width: 0; flex: 1; }
+      legend { font-weight: bold; margin-bottom: 5px; }
+      textarea { width: 100%; box-sizing: border-box; vertical-align: top; }
+      button[type="submit"] { padding: 8px 15px; margin-top: 10px; }
+      @media (min-width: 1024px) {
+        .main-content { display: flex; gap: 20px; }
+        .main-content > #jwt-form,
+        .main-content > .result-container {
+          flex-basis: 50%; /* Each item takes up 50% of the width */
+          margin-bottom: 0; /* Remove bottom margin when side-by-side */
+          display: flex; /* Make the result container a flex container */
+          flex-direction: column; /* Stack children vertically */
+          flex: 1; /* Allows the result container to grow and shrink */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="top-nav">
+      <a href="static-page.html">One Tap Static Page</a>
+      <a href="dynamic-page.html">One Tap Dynamic Page</a>
+      <a href="prompt-outcomes.html">Prompt behaviors</a>
+    </nav>
+    <div class="page-container">
+      <h1>JWT Verification</h1>
+
+      <div class="main-content">
+        <form id="jwt-form" action="/user-login" method="post">
+          <fieldset>
+            <legend>Encoded JWT ID Token</legend>
+            <textarea id="credential" name="credential" rows="5"
+                      cols="50"></textarea>
+            <button type="submit">Verify JWT</button>
+          </fieldset>
+        </form>
+
+        <section class="result-container">
+          <fieldset>
+            <legend>Decode and verify result</legend>
+            <p id="status"></p>
+            <pre id="result"></pre>
+          </fieldset>
+        </section>
+      </div>
+    </div>
+    <script>
+      const statusElement = document.getElementById("status");
+      const resultElement = document.getElementById("result");
+
+      const handleResponse = (responseData) => {
+        const { status, message } = responseData;
+        const result = message
+          ? status === "success"
+            ? JSON.stringify(message, null, 2)
+            : message
+          : "";
+
+        statusElement.textContent = status;
+        resultElement.textContent = result;
+        statusElement.className = "";
+        if (status === "success") {
+          statusElement.classList.add("success");
+        } else if (status === "error") {
+          statusElement.classList.add("error");
+        }
+      };
+
+      const getEncodedDataFromHash = (hash) => {
+        const urlParams = new URLSearchParams(hash.substring(1));
+        return urlParams.get("data");
+      };
+
+      const processHashData = (hash) => {
+        const encodedData = getEncodedDataFromHash(hash);
+        if (encodedData) {
+          try {
+            const jsonData = JSON.parse(decodeURIComponent(encodedData));
+            handleResponse(jsonData);
+            history.pushState(
+              "",
+              document.title,
+              window.location.pathname + window.location.search,
+            );
+          } catch (error) {
+            handleResponse({
+              status: "error",
+              message: "Error parsing data from URL: " + error,
+            });
+          }
+        }
+      };
+
+      window.addEventListener("load",
+                              () => processHashData(window.location.hash));
+      window.addEventListener("hashchange",
+                              () => processHashData(window.location.hash));
+    </script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+
+        const generateRandomString = (length) => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+                      "abcdefghijklmnopqrstuvwxyz" +
+                      "0123456789";
+          let result = "";
+          for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return result;
+        };
+
+        const csrfToken = generateRandomString(12);
+        document.cookie = `g_csrf_token=${csrfToken};path=/;SameSite=Lax`;
+        const form = document.getElementById("jwt-form");
+        const hiddenInput = document.createElement("input");
+        hiddenInput.setAttribute("type", "hidden");
+        hiddenInput.setAttribute("name", "g_csrf_token");
+        hiddenInput.setAttribute("value", csrfToken);
+        form.appendChild(hiddenInput);
+      });
+    </script>
+  </body>
+</html>
